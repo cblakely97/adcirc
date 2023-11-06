@@ -2440,7 +2440,8 @@ C     ----------------------------------------------------------------
       USE GLOBAL, ONLY: CBaroclinic, CORIF, DTDP, NB, NM, IDEN,
      &                  IFSPROTS, RAMP
       USE MESH, ONLY: DRVMAP2DSPVEC, UVECTMP, VVECTMP, RVELF
-      USE INTERNALTIDE, ONLY: UBar, VBar, MunkHPFilter
+      USE INTERNALTIDE, ONLY: UBar, VBar, MunkHPFilter,
+     &                        SHORT_LSQ_HA, UTide, VTide
       IMPLICIT NONE
       INTEGER, intent(in) :: NP                   ! number of nodes in grid
       REAL(8), intent(in), dimension(:) :: TK   ! scalar friction
@@ -2458,7 +2459,7 @@ C     ----------------------------------------------------------------
       REAL(8) :: Nmdiff, Nbdiff, Fdiff, adju, adjv, adjuv
       logical, save ::  first_entry = .TRUE.
       ! CPB: for tidal velocities
-      REAL(8) :: cosAMIGT, sinAMIGT, DissTidal, DissTotal, jjwgamma,
+      REAL(8) :: cosAMIGT, sinAMIGT, DTidal, DTotal, jjwgamma,
      &            Cxx, Cyy, Cxy
       INTEGER :: NCYC
       REAL(8),DIMENSION(:),ALLOCATABLE :: Udmy, Vdmy      
@@ -2504,7 +2505,8 @@ C              (unnecessary for IT_FricNoOfVals == 1)
          Baroc: IF (CBaroclinic.and.abs(IDEN).ge.5) THEN
 C           2DDI ADCIRC with baroclinic coupling
             if (abs(IDEN).ne.7) then
-               CALL MunkHPFilter(U,V,IT)
+               !CALL MunkHPFilter(U,V,IT)
+               CALL SHORT_LSQ_HA(U,V,IT)
             endif
             IF (IT_FricNoOfVals == 5) THEN
 C           Use the "Nonlocal" Nycander (2005) type tensor wave drag
@@ -2567,21 +2569,30 @@ C           1st column is coefficient, 2nd column is the squared hypotenuse slop
                      ! Divide coefficient by criticality if > 1
                      ! (saturates out at high criticalities) 
                      Fit = Fit / max(1d0,gamma2)                   
+                     ! calculate Cxx, Cxy, Cyy
+                     Cxx = Fit*IT_Fric(I,2)**2d0
+                     Cyy = Fit*IT_Fric(I,3)**2d0
+                     Cxy = Fit*IT_Fric(I,2)*IT_Fric(I,3)
                      ! Calculate adjustment based on tidal residual
                      if (abs(IDEN).ne.7) then
                         ! Calculate the adjustment factors based on the delayed moving mean
-                        IF (ABS(U(I)).GT.1d-3.AND.
-     &                      ABS(V(I)).GT.1d-3) THEN
-                           adju = UBar(I)/U(I)
-                           adjv = VBar(I)/V(I)
+                        DTidal = Cxx*UTide(I)**2d0 +
+     &                           2*Cxy*UTide(I)*VTide(I) +
+     &                           Cyy*VTide(I)**2d0
+                        DTotal = Cxx*U(I)**2d0 +
+     &                           2*Cxy*U(I)*V(I) +
+     &                           Cyy*V(I)**2d0
+                        IF (DTotal.LT.1d-10) THEN
+                           adju = 1d0
+                        ELSE
+                           adju = Dtidal/Dtotal
                         ENDIF
-                        adjuv = 0.5d0*(adju + adjv)
                      endif
                      ! Implement the friction with possible adjustment
                      IF (IT_FricNoOfVals == 3) then
                         TKM(1,I) = TK(I) + adju*Fit*IT_Fric(I,2)**2d0
-                        TKM(2,I) = TK(I) + adjv*Fit*IT_Fric(I,3)**2d0
-                        TKM(3,I) = adjuv*Fit*IT_Fric(I,2)*IT_Fric(I,3)
+                        TKM(2,I) = TK(I) + adju*Fit*IT_Fric(I,3)**2d0
+                        TKM(3,I) = adju*Fit*IT_Fric(I,2)*IT_Fric(I,3)
                      else
                         TKM(1:2,I) = TK(I) + adjuv*Fit*IT_Fric(I,2)
                         TKM(3,I)   = 0.0d0
