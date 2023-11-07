@@ -2595,9 +2595,13 @@ C           1st column is coefficient, 2nd column is the squared hypotenuse slop
                      endif
                      ! Implement the friction with possible adjustment
                      IF (IT_FricNoOfVals == 3) then
-                        TKM(1,I) = TK(I) + adju*Fit*IT_Fric(I,2)**2d0
-                        TKM(2,I) = TK(I) + adju*Fit*IT_Fric(I,3)**2d0
-                        TKM(3,I) = adju*Fit*IT_Fric(I,2)*IT_Fric(I,3)
+                        TKM(1,I) = TK(I)! + adju*Fit*IT_Fric(I,2)**2d0
+                        TKM(2,I) = TK(I)! + adju*Fit*IT_Fric(I,3)**2d0
+                        TKM(3,I) = 0d0!adju*Fit*IT_Fric(I,2)*IT_Fric(I,3)
+                        ADRAGU(I) = -(Cxx*(U(I)-UBar(I))+
+                                      Cxy*(V(I)-VBar(I)))
+                        ADRAGV(I) = -(Cxy*(U(I)-UBar(I))+
+                                      Cyy*(V(I)-VBar(I)))
                      else
                         TKM(1:2,I) = TK(I) + adjuv*Fit*IT_Fric(I,2)
                         TKM(3,I)   = 0.0d0
