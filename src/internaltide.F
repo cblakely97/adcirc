@@ -535,6 +535,128 @@ C---------------------------------------------------------------------C
       END SUBROUTINE CalcMunkLPWeights
 C---------------------------------------------------------------------C
 C---------------------------------------------------------------------C
+      SUBROUTINE HYCOM49Filter(U_i,V_i,TimeStep)
+C---------------------------------------------------------------------C
+C     This subroutine applies the 49-hour filter described in HYCOM as
+C     a convolution of a 21 hour (10 point) 2nd-order Savitzky-Golay
+C     smoothing filter and a 24.842 hr boxcar filter.
+C
+C     Coleman Blakely 4/18/2024
+C---------------------------------------------------------------------C
+      USE SIZES, ONLY : MYPROC
+      USE MESH, ONLY : NP
+      USE GLOBAL, ONLY: DTDP, np_g
+      USE GL2LOC_MAPPING, ONLY : GATHERGLOBAL_REAL  
+      IMPLICIT NONE
+      REAL(8),INTENT(IN),DIMENSION(:) :: U_i, V_i ! current velocity
+      INTEGER,INTENT(IN) :: TimeStep    ! current time step
+      REAL(8) :: filtL = 49d0*3600d0        ! filter length (s)
+      REAL(8) :: T = 60d0*60d0             ! sampling interval (s)
+      INTEGER,SAVE :: NS = 1   ! number of samples
+      LOGICAL,SAVE :: first_call = .TRUE.
+      ! need indices to check if the current and previous time step are
+      ! in the same 1 hour window
+      INTEGER :: L, Lm           
+      INTEGER :: ii, kk ! for loops
+      ! for populating the UAV, VAV matrices at the start of the run
+      INTEGER,SAVE :: ISTA
+
+      IF ( first_call ) THEN
+         first_call = .FALSE.
+         NS = FLOOR(filtL/T)
+         ista = 1
+         ALLOCATE( UAV(NP,NS), VAV(NP,NS) )
+         UAV = 0d0
+         VAV = 0d0
+         ALLOCATE( UBar(NP), VBar(NP) )
+         UBar = 0d0
+         VBar = 0d0
+         CALL CalcMunkLPWeights()
+      ENDIF
+      ! check if this and the previous timestep are in the same hour
+      L = FLOOR(TimeStep*DTDP/T)
+      Lm = FLOOR((TimeStep-1)*DTDP/T)
+      IF ( L.GT.Lm ) THEN
+         ! check if we are >= 49 hours into the run
+         IF ( ISTA.GT.NS ) THEN
+            DO ii = 1,NP
+               DO kk = 1,NS-1
+                  UAV(ii,kk) = UAV(ii,kk+1)
+                  VAV(ii,kk) = VAV(ii,kk+1)
+               ENDDO
+               UAV(ii,NS) = U_i(ii)
+               VAV(ii,NS) = V_i(ii)
+            ENDDO
+            UBar = 0d0
+            VBar = 0d0
+            DO ii = 1,NP
+               DO kk = 1,NS
+                  UBar(ii) = UBar(ii) + wts(kk)*UAV(ii,kk)
+                  VBar(ii) = VBar(ii) + wts(kk)*VAV(ii,kk)
+               ENDDO
+            ENDDO
+         ELSE
+            ! if we do not have a 49 hr record yet just use a lagged
+            ! average
+            DO ii = 1,NP
+               UAV(ii,ISTA) = U_i(ii)
+               VAV(ii,ISTA) = V_i(ii)
+               UBar(ii) = SUM(UAV(ii,1:ISTA))/DBLE(ISTA)
+               VBar(ii) = SUM(VAV(ii,1:ISTA))/DBLE(ISTA)
+            ENDDO
+            ISTA = ISTA + 1
+         ENDIF
+      ENDIF
+C---------------------------------------------------------------------C
+      END SUBROUTINE HYCOM49Filter
+C---------------------------------------------------------------------C
+C---------------------------------------------------------------------C
+      SUBROUTINE CalcHYCOM49Weights()
+C---------------------------------------------------------------------C
+C     This subroutine sets up the filter weights for use in the
+C     high-pass filter derived from the so-called Munk "Tide Killer"
+C     low-pass filter. 
+C---------------------------------------------------------------------C
+      IMPLICIT NONE
+      REAL(8),DIMENSION(25) :: f2hrly   ! original weights (one sided)
+      INTEGER :: NS = 49                ! length of HP filter needed
+      REAL(8) :: K                     ! for normalizing the LP filter
+      INTEGER :: ii                     ! for loops
+      !
+      ! allocate weights
+      ALLOCATE( wts(NS) )
+      ! define low-pass filter weights (not normalized and one-sided)
+      f2hrly = (/ 9.297873,
+     &            9.297873, 9.338932, 9.835878,
+     &          10.04647, 10.00111, 9.730179,
+     &          9.264084, 8.633219, 7.867976,
+     &          6.998751, 6.055939, 5.069937,
+     &          4.071137, 3.089936, 2.156729,
+     &          1.301912, 0.5558784, -5.0975680E-02,
+     &          -0.4882553, -0.7255653,-0.7325106,
+     &          -0.4786960, 0.0, 0.0 /)
+      ! find sum to normalize low pass filter
+      K = f2hrly(1)
+      DO ii = 2,25
+         K = K + 2d0*f2hrly(ii)
+      END DO
+      ! normalize low pass filter weights
+      DO ii = 1,25
+         f2hrly(ii) = f2hrly(ii)/K
+      END DO
+      ! turn one-sided low-pass filter into two-sided high-pass filter
+      DO ii = 1,24
+         ! -m to -1
+         wts(25+ii) = f2hrly(ii+1)
+         ! 1 to m
+         wts(25-ii) = f2hrly(ii+1)
+      END DO
+      ! 0 (center point)
+      wts(25) = f2hrly(1)
+C---------------------------------------------------------------------C
+      END SUBROUTINE CalcHYCOM49Weights
+C---------------------------------------------------------------------C
+C---------------------------------------------------------------------C
       SUBROUTINE CalcMunkHPWeights()
 C---------------------------------------------------------------------C
 C     This subroutine sets up the filter weights for use in the

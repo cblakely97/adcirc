@@ -2437,7 +2437,8 @@ C     ----------------------------------------------------------------
      &                  IFSPROTS, RAMP, ADRAGU, ADRAGV, np_g
       USE MESH, ONLY: DRVMAP2DSPVEC, UVECTMP, VVECTMP, RVELF
       USE INTERNALTIDE, ONLY: UNTIDE, UBar, VBar, MunkLPFilter,
-     &                        RESYNTH_TIDES, UTide, VTide
+     &                        RESYNTH_TIDES, UTide, VTide,
+     &                        HYCOM49Filter
       USE GL2LOC_MAPPING, ONLY : GATHERGLOBAL_REAL  
       IMPLICIT NONE
       INTEGER, intent(in) :: NP                   ! number of nodes in grid
@@ -2507,7 +2508,8 @@ C              (unnecessary for IT_FricNoOfVals == 1)
          Baroc: IF (CBaroclinic.and.abs(IDEN).ge.5) THEN
 C           2DDI ADCIRC with baroclinic coupling
             if (abs(IDEN).ne.7) then
-               CALL UNTIDE(U,V,IT)
+               CALL HYCOM49FILTER(U,V,IT)
+               !CALL UNTIDE(U,V,IT)
                !CALL MunkHPFilter(U,V,IT)
                !CALL MunkLPFilter(U,V,IT)
                !CALL RESYNTH_TIDES(IT)
