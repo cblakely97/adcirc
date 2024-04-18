@@ -2476,7 +2476,7 @@ C              (unnecessary for IT_FricNoOfVals == 1)
                IF ( IT_FricNoOfVals.eq.3 ) THEN
                   allocate(Hx(NP),Hy(NP))
                   DO I = 1,NP
-                     if (CBaroclinic.and.abs(IDEN).ge.5) then
+                     if (CBaroclinic.and.abs(IDEN).ge.5.and..false.) then
                         Hx(I) = IT_Fric(I,2)
                         Hy(I) = IT_Fric(I,3)
                      else
@@ -2489,7 +2489,7 @@ C              (unnecessary for IT_FricNoOfVals == 1)
                   CALL DRVMAP2DSPVEC( Hx, Hy,
      &                UVECTMP, VVECTMP, NP, FWD = .TRUE. ) ;
                   DO I = 1,NP
-                     if (CBaroclinic.and.abs(IDEN).ge.5) then
+                     if (CBaroclinic.and.abs(IDEN).ge.5.and..false.) then
                         IT_Fric(I,2) = Hx(I)
                         IT_Fric(I,3) = Hy(I)
                      else
@@ -2582,6 +2582,9 @@ C           1st column is coefficient, 2nd column is the squared hypotenuse slop
                         Cxx = Fit*IT_Fric(I,2)**2d0
                         Cyy = Fit*IT_Fric(I,3)**2d0
                         Cxy = Fit*IT_Fric(I,2)*IT_Fric(I,3)
+                        Cxx=IT_Fric(I,1)
+                        Cyy=IT_Fric(I,2)
+                        Cxy=IT_Fric(I,3)
                         Dtotal = Cxx*U(I)**2d0 + 
      &                           2*Cxy*U(I)*V(I) +
      &                           Cyy*V(I)**2d0
@@ -2596,9 +2599,9 @@ C           1st column is coefficient, 2nd column is the squared hypotenuse slop
                      endif
                      ! Implement the friction with possible adjustment
                      IF (IT_FricNoOfVals == 3) then
-                        TKM(1,I) = TK(I) + adju*Fit*IT_Fric(I,2)**2d0
-                        TKM(2,I) = TK(I) + adju*Fit*IT_Fric(I,3)**2d0
-                        TKM(3,I) = adju*Fit*IT_Fric(I,2)*IT_Fric(I,3)
+                        TKM(1,I) = TK(I) + adju*Cxx
+                        TKM(2,I) = TK(I) + adju*Cyy
+                        TKM(3,I) = adju*Cxy
                      else
                         TKM(1:2,I) = TK(I) + adjuv*Fit*IT_Fric(I,2)
                         TKM(3,I)   = 0.0d0
